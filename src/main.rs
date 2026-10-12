@@ -1,5 +1,6 @@
 #![windows_subsystem = "windows"]
 mod model;
+mod settings;
 
 use model::{Config, Reminder};
 use std::{
@@ -33,15 +34,16 @@ fn wide(s: &str) -> Vec<u16> {
 fn from_wide(s: &[u16]) -> String {
     String::from_utf16_lossy(&s[..s.iter().position(|&c| c == 0).unwrap_or(s.len())])
 }
-fn config_path() -> PathBuf {
-    std::env::current_exe()
-        .unwrap_or_default()
-        .with_file_name("settings.ini")
-}
-fn load_config() -> Config {
-    std::fs::read_to_string(config_path())
-        .map(|s| Config::parse(&s))
-        .unwrap_or_default()
+unsafe fn settings_error(hwnd: HWND, error: &std::io::Error) {
+    MessageBoxW(
+        hwnd,
+        wide(&format!(
+            "설정 파일을 생성하거나 읽지 못했습니다.\n\n{error}"
+        ))
+        .as_ptr(),
+        wide("스더저장해").as_ptr(),
+        MB_ICONERROR,
+    );
 }
 const RUN_KEY: &str = "Software\\Microsoft\\Windows\\CurrentVersion\\Run";
 const RUN_NAME: &str = "MabiSaveReminder";
@@ -108,6 +110,7 @@ unsafe fn set_startup(enabled: bool) -> bool {
 }
 struct App {
     config: Config,
+    config_path: PathBuf,
     reminder: Reminder,
     clock: Instant,
     font: HFONT,
@@ -486,17 +489,27 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, w: WPARAM, l: LPARAM) ->
                 SHOW => show(hwnd),
                 HIDE => hide(hwnd),
                 SETTINGS => {
+                    if let Err(e) = settings::load(&(*p).config_path, None) {
+                        settings_error(hwnd, &e);
+                        return 0;
+                    }
                     ShellExecuteW(
                         null_mut(),
                         wide("open").as_ptr(),
                         wide("notepad.exe").as_ptr(),
-                        wide(&format!("\"{}\"", config_path().display())).as_ptr(),
+                        wide(&format!("\"{}\"", (*p).config_path.display())).as_ptr(),
                         null(),
                         SW_SHOWNORMAL,
                     );
                 }
                 RELOAD => {
-                    (*p).config = load_config();
+                    match settings::load(&(*p).config_path, None) {
+                        Ok(config) => (*p).config = config,
+                        Err(e) => {
+                            settings_error(hwnd, &e);
+                            return 0;
+                        }
+                    }
                     if (*p).reminder.started_ms.is_some() {
                         // Retain original deadline when editing settings.
                         SetTimer(
@@ -552,6 +565,14 @@ fn main() {
             CloseHandle(mutex);
             return;
         }
+        let (config_path, config) = match settings::prepare() {
+            Ok(settings) => settings,
+            Err(e) => {
+                settings_error(null_mut(), &e);
+                CloseHandle(mutex);
+                return;
+            }
+        };
         let instance = GetModuleHandleW(null());
         let class = wide("MabiSaveReminderWindow");
         let wc = WNDCLASSW {
@@ -600,7 +621,8 @@ fn main() {
             app_icon(GetSystemMetrics(SM_CXSMICON)) as isize,
         );
         let mut app = Box::new(App {
-            config: load_config(),
+            config,
+            config_path,
             reminder: Reminder::default(),
             clock: Instant::now(),
             font: null_mut(),
