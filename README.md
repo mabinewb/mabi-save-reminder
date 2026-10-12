@@ -2,7 +2,7 @@
 
 Windows 10/11 x64용 Rust 프로그램입니다. 별도 런타임 설치 없이 `스더저장해.exe`를 실행하세요. 기본 실행은 트레이에만 표시되며, 이미 마비노기가 실행 중이면 바로 알림이 뜹니다.
 
-[최신 버전 다운로드](https://github.com/mabinewb/mabi-save-reminder/releases/latest)에서 `스더저장해.zip`을 받아 압축을 푸세요. 실행 파일과 `settings.ini`를 같은 폴더에 두고 실행하면 됩니다.
+[최신 버전 다운로드](https://github.com/mabinewb/mabi-save-reminder/releases/latest)에서 ZIP 파일(`seudeo-save-reminder.zip`, 표시 이름: 스더저장해.zip)을 받아 압축을 푸세요. 압축 안의 `스더저장해.exe`와 `settings.ini`를 같은 폴더에 두고 실행하면 됩니다.
 
 ## 동작
 
